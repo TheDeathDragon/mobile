@@ -6,6 +6,7 @@ package main
 
 import (
 	"archive/zip"
+	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -19,7 +20,12 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
+const (
+	DefaultLibName = "gojni"
+)
+
 func goAndroidBind(gobind string, pkgs []*packages.Package, targets []targetInfo) error {
+	targetPkg := pkgs[0].Name
 	if _, err := sdkpath.AndroidHome(); err != nil {
 		return fmt.Errorf("this command requires the Android SDK to be installed: %w", err)
 	}
@@ -58,7 +64,7 @@ func goAndroidBind(gobind string, pkgs []*packages.Package, targets []targetInfo
 	for _, t := range targets {
 		t := t
 		wg.Go(func() error {
-			return buildAndroidSO(androidDir, t.arch)
+			return buildAndroidSO(androidDir, t.arch, targetPkg)
 		})
 	}
 	if err := wg.Wait(); err != nil {
@@ -111,8 +117,9 @@ func buildSrcJar(src string) error {
 // javac and jar commands are needed to build classes.jar.
 func buildAAR(srcDir, androidDir string, pkgs []*packages.Package, targets []targetInfo) (err error) {
 	var out io.Writer = ioutil.Discard
+	targetPkg := pkgs[0].Name
 	if buildO == "" {
-		buildO = pkgs[0].Name + ".aar"
+		buildO = targetPkg + ".aar"
 	}
 	if !strings.HasSuffix(buildO, ".aar") {
 		return fmt.Errorf("output file name %q does not end in '.aar'", buildO)
@@ -143,7 +150,7 @@ func buildAAR(srcDir, androidDir string, pkgs []*packages.Package, targets []tar
 	}
 	const manifestFmt = `<manifest xmlns:android="http://schemas.android.com/apk/res/android" package=%q>
 <uses-sdk android:minSdkVersion="%d"/></manifest>`
-	fmt.Fprintf(w, manifestFmt, "go."+pkgs[0].Name+".gojni", buildAndroidAPI)
+	fmt.Fprintf(w, manifestFmt, "go."+targetPkg+"."+targetPkg, buildAndroidAPI)
 
 	w, err = aarwcreate("proguard.txt")
 	if err != nil {
@@ -162,7 +169,7 @@ func buildAAR(srcDir, androidDir string, pkgs []*packages.Package, targets []tar
 	if err != nil {
 		return err
 	}
-	if err := buildJar(w, srcDir); err != nil {
+	if err := buildJar(w, srcDir, targetPkg); err != nil {
 		return err
 	}
 
@@ -213,7 +220,7 @@ func buildAAR(srcDir, androidDir string, pkgs []*packages.Package, targets []tar
 
 	for _, t := range targets {
 		toolchain := ndk.Toolchain(t.arch)
-		lib := toolchain.abi + "/libgojni.so"
+		lib := fmt.Sprintf("%s/lib%s.so", toolchain.abi, targetPkg)
 		w, err = aarwcreate("jni/" + lib)
 		if err != nil {
 			return err
@@ -249,7 +256,7 @@ const (
 	minAndroidAPI  = 16
 )
 
-func buildJar(w io.Writer, srcDir string) error {
+func buildJar(w io.Writer, srcDir, targetPkg string) error {
 	var srcFiles []string
 	if buildN {
 		srcFiles = []string{"*.java"}
@@ -260,6 +267,14 @@ func buildJar(w io.Writer, srcDir string) error {
 			}
 			if filepath.Ext(path) == ".java" {
 				srcFiles = append(srcFiles, filepath.Join(".", path[len(srcDir):]))
+			}
+			if strings.Contains(path, "LoadJNI.java") {
+				content, err := ioutil.ReadFile(path)
+				if err != nil {
+					return err
+				}
+				content = bytes.Replace(content, []byte(DefaultLibName), []byte(targetPkg), 1)
+				ioutil.WriteFile(path, content, 775)
 			}
 			return nil
 		})
@@ -349,7 +364,7 @@ func writeJar(w io.Writer, dir string) error {
 
 // buildAndroidSO generates an Android libgojni.so file to outputDir.
 // buildAndroidSO is concurrent-safe.
-func buildAndroidSO(outputDir string, arch string) error {
+func buildAndroidSO(outputDir string, arch string, targetPkg string) error {
 	// Copy the environment variables to make this function concurrent-safe.
 	env := make([]string, len(androidEnv[arch]))
 	copy(env, androidEnv[arch])
@@ -392,7 +407,7 @@ func buildAndroidSO(outputDir string, arch string) error {
 		"./gobind",
 		env,
 		"-buildmode=c-shared",
-		"-o="+filepath.Join(outputDir, "src", "main", "jniLibs", toolchain.abi, "libgojni.so"),
+		"-o="+filepath.Join(outputDir, "src", "main", "jniLibs", toolchain.abi, fmt.Sprintf("lib%s.so", targetPkg)),
 	); err != nil {
 		return err
 	}
