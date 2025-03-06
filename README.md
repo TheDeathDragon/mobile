@@ -1,34 +1,26 @@
-# Go support for Mobile devices
+# 修改版 Go Mobile 工具
 
-[![Go Reference](https://pkg.go.dev/badge/golang.org/x/mobile.svg)](https://pkg.go.dev/golang.org/x/mobile)
+不使用默认的 `libgojni` 作为 so 库名字
 
-The Go mobile repository holds packages and build tools for using Go on mobile platforms.
+使用包名作为 so 的名字
 
-Package documentation as a starting point:
+## Go Mobile 使用
 
-- [Building all-Go apps](https://golang.org/x/mobile/app)
-- [Building libraries for SDK apps](https://golang.org/x/mobile/cmd/gobind)
+```bash
+go install golang.org/x/mobile/cmd/gomobile@latest
+go get golang.org/x/mobile/cmd/gomobile
+gomobile init
+gomobile bind -v -o MoeProxy.aar -ldflags '-s -w' -target=android -androidapi 28 -target=android/arm64
+```
 
-![Caution image](doc/caution.png)
+安装完成之后，去替换掉 `go\bin` 里面的 `gomobile.exe` 就可以了
 
-The Go Mobile project is experimental. Use this at your own risk.
-While we are working hard to improve it, neither Google nor the Go
-team can provide end-user support.
+## Go Moblie 编译
 
-This is early work and installing the build system requires Go 1.5.
-Follow the instructions on
-[golang.org/wiki/Mobile](https://golang.org/wiki/Mobile)
-to install the gomobile command, build the
-[basic](https://golang.org/x/mobile/example/basic)
-and the [bind](https://golang.org/x/mobile/example/bind) example apps.
+如果要自己编译 `gomobile.exe` 的话，直接编译即可
 
---
-
-Contributions to Go are appreciated. See https://go.dev/doc/contribute.
-
-The git repository is https://go.googlesource.com/mobile.
-
-* Bugs can be filed at the [Go issue tracker](https://go.dev/issue/new?title=x/mobile:+).
-* Feature requests should preliminary be discussed on
-[golang-nuts](https://groups.google.com/forum/#!forum/golang-nuts)
-mailing list.
+```bash
+cd cmd\\gomobile
+go mod tidy 
+go build
+```
