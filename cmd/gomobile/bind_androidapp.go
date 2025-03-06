@@ -268,7 +268,7 @@ func buildJar(w io.Writer, srcDir, targetPkg string) error {
 			if filepath.Ext(path) == ".java" {
 				srcFiles = append(srcFiles, filepath.Join(".", path[len(srcDir):]))
 			}
-			if strings.Contains(path, "LoadJNI.java") {
+			if strings.Contains(path, "Seq.java") {
 				content, err := ioutil.ReadFile(path)
 				if err != nil {
 					return err
